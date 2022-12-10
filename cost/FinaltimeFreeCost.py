@@ -10,8 +10,7 @@ def print_np(x):
     print ("Shape is %s" % (x.shape,))
     # print ("Values are: \n%s" % (x))
 
-from cost import OptimalcontrolCost
-
+from cost.cost import OptimalcontrolCost
 class Finaltime(OptimalcontrolCost):
     def __init__(self,name,ix,iu,N):
         super().__init__(name,ix,iu,N)

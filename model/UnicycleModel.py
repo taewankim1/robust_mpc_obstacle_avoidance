@@ -13,8 +13,7 @@ def print_np(x):
     print ("Shape is %s" % (x.shape,))
     # print ("Values are: \n%s" % (x))
 
-from model import OptimalcontrolModel
-
+from model.model import OptimalcontrolModel
 class unicycle(OptimalcontrolModel):
     def __init__(self,name,ix,iu,linearzation):
         super().__init__(name,ix,iu,linearzation)

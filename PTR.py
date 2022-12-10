@@ -1,12 +1,19 @@
+from __future__ import division
 import matplotlib.pyplot as plt
+from scipy.integrate import odeint
 from scipy.integrate import solve_ivp
 import numpy as np
 import cvxpy as cvx
 import time
+import random
 def print_np(x):
     print ("Type is %s" % (type(x)))
     print ("Shape is %s" % (x.shape,))
     # print ("Values are: \n%s" % (x))
+
+import cost
+import model
+import IPython
 
 from Scaling import TrajectoryScaling
 
@@ -23,7 +30,6 @@ class PTR:
         self.delT = tf/horizon
         if Scaling is None :
             self.Scaling = TrajectoryScaling() 
-            self.Scaling.S_sigma = 1
             self.flag_update_scale = True
         else :
             self.Scaling = Scaling
@@ -43,6 +49,7 @@ class PTR:
         self.last_head = True
         self.type_discretization = type_discretization   
         self.flag_policyopt = flag_policyopt
+        self.Alpha = np.power(10,np.linspace(0,-3,11))
         self.initialize()
 
     def initialize(self) :
@@ -51,15 +58,14 @@ class PTR:
         self.x0 = np.zeros(self.model.ix)
         self.x = np.zeros((self.N+1,self.model.ix))
         self.u = np.ones((self.N+1,self.model.iu))
-        self.xbar = np.zeros((self.N+1,self.model.ix))
-        self.ubar = np.ones((self.N+1,self.model.iu))
+        # self.xbar = np.zeros((self.N+1,self.model.ix))
+        # self.ubar = np.ones((self.N+1,self.model.iu))
         self.vc = np.ones((self.N,self.model.ix)) * 1e-1
         self.tr = np.ones((self.N+1))
 
         self.xnew = np.zeros((self.N+1,self.model.ix))
         self.unew = np.zeros((self.N+1,self.model.iu))
         self.vcnew = np.zeros((self.N,self.model.ix))
-        self.Alpha = np.power(10,np.linspace(0,-3,11))
 
         self.A = np.zeros((self.N,self.model.ix,self.model.ix))
         self.B = np.zeros((self.N,self.model.ix,self.model.iu))  
@@ -75,10 +81,8 @@ class PTR:
         self.cvcnew = 0
         self.ctrnew = 0
 
-
     def get_model(self) :
         return self.A,self.B,self.s,self.z,self.vc
-
 
     def get_linearized_matrices(self,x,u,delT,tf) :
         assert abs(delT*self.N - tf) < 1e-6
@@ -91,7 +95,9 @@ class PTR:
             Bm = np.copy(B)
             Bp = np.copy(B)
         elif self.type_discretization == 'foh' :
-            A,Bm,Bp,s,z,x_prop_n = self.model.diff_discrete_foh(x[0:self.N,:],u,delT,tf)
+            # A,Bm,Bp,s,z,x_prop_n = self.model.diff_discrete_foh(x[0:self.N,:],u,delT,tf)
+            # A,Bm,Bp,s,z,x_prop_n = self.model.diff_discrete_foh_tau(x[0:self.N,:],u,1/self.N,tf)
+            A,Bm,Bp,s,z,x_prop_n = self.model.diff_discrete_foh_variational(x[0:self.N,:],u,1/self.N,tf)
             x_prop = np.squeeze(A@np.expand_dims(x[0:self.N,:],2) +
                             Bm@np.expand_dims(u[0:self.N,:],2) + 
                             Bp@np.expand_dims(u[1:self.N+1,:],2) + 
@@ -106,35 +112,36 @@ class PTR:
         Bp[np.abs(Bp) < eps_machine] = 0
         return A,B,Bm,Bp,s,z,x_prop,x_prop_n
 
-    # TODO - merge multiple and single. 
-    # Instead, accept a variable that determines if it is single or multiple
+
     def forward_multiple(self,x,u,tf,iteration) :
         N = self.N
         delT = tf/N
         ix = self.model.ix
         iu = self.model.iu
 
-        def dfdt(t,x,um,up) :
+        def dfdt(t,V,um,up) :
             if self.type_discretization == "zoh" :
                 u = um
             elif self.type_discretization == "foh" :
                 alpha = (delT - t) / delT
                 beta = t / delT
                 u = alpha * um + beta * up
-            return np.squeeze(self.model.forward(x,u))
+            x = V.reshape((N,ix))
+            f = self.model.forward(x,u)
+            return f.flatten()
 
+        x0 = x[0:N].flatten()
+        if iteration < 10 :
+            sol = solve_ivp(dfdt,(0,delT),x0,args=(u[0:N],u[1:]))
+        else :
+            sol = solve_ivp(dfdt,(0,delT),x0,args=(u[0:N],u[1:]),method='RK45',rtol=1e-6,atol=1e-10)
         xnew = np.zeros((N+1,ix))
         xnew[0] = x[0]
+        xnew[1:] = sol.y[:,-1].reshape((N,-1))
+        xprop = sol.y.T
+        tprop = sol.t
 
-        for i in range(N) :
-            if iteration < 5 : # TODO make # of iteration be a variable
-                sol = solve_ivp(dfdt,(0,delT),x[i],args=(u[i],u[i+1]))
-            else :
-                sol = solve_ivp(dfdt,(0,delT),x[i],args=(u[i],u[i+1]),method='RK45',rtol=1e-6,atol=1e-10)
-            xnew[i+1] = sol.y[:,-1]
-
-        return xnew,np.copy(u)
-
+        return xnew,np.copy(u),xprop,tprop
 
     def forward_single(self,x0,u,tf,iteration) :
         N = self.N
@@ -153,14 +160,45 @@ class PTR:
 
         xnew = np.zeros((N+1,ix))
         xnew[0] = x0
+        xprop = []
 
         for i in range(N) :
-            if iteration < 5 : # TODO make # of iteration be a variable
+            if iteration < 10 :
                 sol = solve_ivp(dfdt,(0,delT),xnew[i],args=(u[i],u[i+1]))
             else :
                 sol = solve_ivp(dfdt,(0,delT),xnew[i],args=(u[i],u[i+1]),method='RK45',rtol=1e-6,atol=1e-10)
             xnew[i+1] = sol.y[:,-1]
+            xprop.append(sol.y[:,-1])
 
+        return xnew,np.copy(u),xprop
+
+    def forward_multiple_serial(self,x,u,tf,iteration=0) :
+        N = self.N
+        delT = tf/N
+        ix = self.model.ix
+        iu = self.model.iu
+
+        def dfdt(t,x,um,up) :
+            if self.type_discretization == "zoh" :
+                u = um
+            elif self.type_discretization == "foh" :
+                alpha = (delT - t) / delT
+                beta = t / delT
+                u = alpha * um + beta * up
+            return np.squeeze(self.model.forward(x,u))
+
+        xnew = []
+        for i in range(N) :
+            if iteration < 10 :
+                sol = solve_ivp(dfdt,(0,delT),x[i],args=(u[i],u[i+1]))
+            else :
+                sol = solve_ivp(dfdt,(0,delT),x[i],args=(u[i],u[i+1]),method='RK45',rtol=1e-6,atol=1e-10)
+            xnew.append(sol.y.T)
+        #     if i == 0 :
+        #         xnew = sol.y.T[:-1]
+        #     else :
+        #         xnew = np.vstack((xnew,sol.y.T[:-1]))
+        # xnew = np.vstack((xnew,x[-1][np.newaxis,:]))
         return xnew,np.copy(u)
 
 
@@ -184,6 +222,12 @@ class PTR:
         constraints = []
         constraints.append(Sx@x_cvx[0]+sx  == self.xi)
         constraints.append(Sx@x_cvx[-1]+sx == self.xf)
+        constraints.append((Su@u_cvx[0]+su)[1]  == 0)
+        constraints.append((Su@u_cvx[-1]+su)[1]  == 0)
+
+        # input delay
+        # constraints.append((Su@u_cvx[0]+su)[2]  == 0)
+        # constraints.append((Su@u_cvx[1]+su)[2]  == 0)
 
         # state and input contraints
         for i in range(0,N+1) :
@@ -213,9 +257,10 @@ class PTR:
         objective_rate = []
         w_control = 1e-4
         for i in range(0,N+1) :
+            # objective_rate.append(w_control * cvx.quad_form(x_cvx[i],np.diag([1,1,1,1,1,1])))
             if i < N :
                 objective_vc.append(self.w_vc * cvx.norm(vc[i],1))
-                objective_rate.append(self.w_rate * cvx.quad_form(u_cvx[i+1]-u_cvx[i],np.eye(iu)))
+                objective_rate.append(self.w_rate * cvx.quad_form(u_cvx[i+1]-u_cvx[i],np.diag([1,0.002,0])))
             objective.append(self.w_c * self.cost.estimate_cost_cvx(Sx@x_cvx[i]+
                 sx,Su@u_cvx[i]+su,i))
             objective_tr.append( self.w_tr * (cvx.quad_form(x_cvx[i] -
@@ -283,11 +328,6 @@ class PTR:
         iu = self.model.iu
         N = self.N
         
-        # timer setting
-        # trace for iteration
-        # timer, counters, constraints
-        # timer begin!!
-        
         # generate initial trajectory
         diverge = False
         stop = False
@@ -301,6 +341,7 @@ class PTR:
         total_num_iter = 0
         flag_boundary = False
         for iteration in range(self.maxIter) :
+
             # step1. differentiate dynamics and cost
             self.A,self.B,self.Bm,self.Bp,self.s,self.z,self.x_prop,self.x_prop_n = self.get_linearized_matrices(self.x,self.u,self.delT,self.tf)
 
@@ -355,6 +396,7 @@ class PTR:
                 total_num_iter = iteration+1
 
         return self.xfwd,self.ufwd,self.x,self.u,total_num_iter,flag_boundary,l,l_vc,l_tr,x_traj,u_traj,T_traj
+
 
     def print_eigenvalue(self,A_) :
         eig,eig_vec = np.linalg.eig(A_)

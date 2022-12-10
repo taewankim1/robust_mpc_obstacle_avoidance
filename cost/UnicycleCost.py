@@ -10,8 +10,7 @@ def print_np(x):
     print ("Shape is %s" % (x.shape,))
     # print ("Values are: \n%s" % (x))
 
-from cost import OptimalcontrolCost
-
+from cost.cost import OptimalcontrolCost
 class unicycle(OptimalcontrolCost):
     def __init__(self,name,ix,iu,N):
         super().__init__(name,ix,iu,N)
@@ -33,7 +32,7 @@ class unicycle(OptimalcontrolCost):
         
         return cost_total
 
-class unicycleMPC(OptimalcontrolCost):
+class UnicycleMPCCost(OptimalcontrolCost):
     def __init__(self,name,ix,iu,N):
         super().__init__(name,ix,iu,N)
         self.ix = 3

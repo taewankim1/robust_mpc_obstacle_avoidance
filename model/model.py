@@ -1,21 +1,39 @@
-
-# coding: utf-8
-
-# In[ ]:
-
-from __future__ import division
-from tkinter import W
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 import numpy as np
 import time
 import random
-import IPython
+
 def print_np(x):
     print ("Type is %s" % (type(x)))
     print ("Shape is %s" % (x.shape,))
     # print ("Values are: \n%s" % (x))
 
+class ODE_solution(object) :
+    def __init__(self) :
+        pass
+    def setter(self,y,t) :
+        self.y = y
+        self.t = t
+
+def RK4(odefun, tspan, y0,args,N_RK=10) :
+    t = np.linspace(tspan[0],tspan[-1],N_RK)
+    h = t[1] - t[0]
+    iy = len(y0)
+    y_sol = np.zeros((N_RK,iy))
+    y_sol[0] = y0
+    for idx in range(0,N_RK-1) :
+        tk = t[idx]
+        yk = y_sol[idx]
+        k1 = odefun(tk,yk,*args)
+        k2 = odefun(tk + h/2,yk + h/2*k1,*args)
+        k3 = odefun(tk + h/2,yk + h/2*k2,*args)
+        k4 = odefun(tk+h,yk+h*k3,*args)
+        y_sol[idx+1] = yk + h/6 * (k1 + 2*k2 + 2*k3 + k4)
+
+    sol = ODE_solution()
+    sol.setter(y_sol.T,t)
+    return sol
 
 class OptimalcontrolModel(object) :
     def __init__(self,name,ix,iu,linearization) :
@@ -46,7 +64,7 @@ class OptimalcontrolModel(object) :
             N = np.size(x,axis = 0)
         
         # numerical difference
-        h = pow(2,-17) / 2 
+        h = pow(2,-18)
         eps_x = np.identity(ix)
         eps_u = np.identity(iu)
 
@@ -241,8 +259,6 @@ class OptimalcontrolModel(object) :
                 A,B = self.diff_numeric(x,u)
             elif self.type_linearization == "analytic" :
                 A,B = self.diff(x,u)
-            # print_np(A)
-            # print_np(B)
             dpdt = np.matmul(A,Phi).reshape((length,ix*ix)).transpose()
             dbmdt = np.matmul(Phi_inv,B).reshape((length,ix*iu)).transpose() * alpha
             dbpdt = np.matmul(Phi_inv,B).reshape((length,ix*iu)).transpose() * beta
@@ -259,9 +275,9 @@ class OptimalcontrolModel(object) :
         V0 = np.array([np.hstack((x[i],A0,Bm0,Bp0,s0,z0)) for i in range(N)]).transpose()
         V0_repeat = V0.flatten(order='F')
 
-        # sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-12,atol=1e-12)
-        sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-6,atol=1e-10)
-        # sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N))
+        # sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-6,atol=1e-10)
+        sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N))
+        # sol = RK4(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),N_RK=50)
         # IPython.embed()
         idx_state = slice(0,ix)
         idx_A = slice(ix,ix+ix*ix)
@@ -309,8 +325,7 @@ class OptimalcontrolModel(object) :
                 A,B = self.diff_numeric(x_,u_)
             elif self.type_linearization == "analytic" :
                 A,B = self.diff(x_,u_)
-            A = np.squeeze(A,0)
-            B = np.squeeze(B,0)
+            A,B = np.squeeze(A),np.squeeze(B)
             dpdt = np.matmul(A,Phi).reshape((ix*ix)).reshape(-1)
             dbmdt = np.matmul(Phi_inv,B).reshape(-1) * alpha
             dbpdt = np.matmul(Phi_inv,B).reshape(-1) * beta
@@ -334,8 +349,8 @@ class OptimalcontrolModel(object) :
             V0[:ix] = x[i]
             V0[ix:ix*ix+ix] = np.eye(ix).flatten()
 
-            sol = solve_ivp(dvdt,(0,delT),V0,args=(u[i],u[i+1]),method='RK45',rtol=1e-6,atol=1e-10)
-            # sol = solve_ivp(dvdt,(0,delT),V0,args=(u[i],u[i+1]))
+            # sol = solve_ivp(dvdt,(0,delT),V0,args=(u[i],u[i+1]),method='RK45',rtol=1e-6,atol=1e-10)
+            sol = solve_ivp(dvdt,(0,delT),V0,args=(u[i],u[i+1]))
             sol = sol.y[:,-1].reshape(-1)
 
             x_prop.append(sol[idx_state])
@@ -356,7 +371,7 @@ class OptimalcontrolModel(object) :
         return A,Bm,Bp,s,z,x_prop
 
 
-    def diff_discrete_foh_test(self,x,u,delT,tf) :
+    def diff_discrete_foh_tau(self,x,u,dtau,tf) :
         # delT = self.delT
         ix = self.ix
         iu = self.iu
@@ -372,8 +387,8 @@ class OptimalcontrolModel(object) :
         def dvdt(t,V,um,up,length) :
             assert len(um) == len(up)
             assert len(um) == length
-            alpha = (delT - t) / delT
-            beta = t / delT
+            alpha = (dtau - t) / dtau
+            beta = t / dtau
             # print(alpha,beta)
             u = alpha * um + beta * up
             # IPython.embed()
@@ -381,7 +396,9 @@ class OptimalcontrolModel(object) :
             x = V[:ix].transpose()
             Phi = V[ix:ix*ix + ix]
             Phi = Phi.transpose().reshape((length,ix,ix))
-            Phi_inv = np.linalg.inv(Phi)
+            # Phi_inv = np.linalg.inv(Phi)
+            Phi_inv = np.linalg.pinv(Phi)
+
             f = self.forward(x,u)
             if self.type_linearization == "numeric_central" :
                 A,B = self.diff_numeric_central(x,u)
@@ -392,6 +409,7 @@ class OptimalcontrolModel(object) :
             A,B = tf*A,tf*B
             dpdt = np.matmul(A,Phi).reshape((length,ix*ix)).transpose()
             dbmdt = np.matmul(Phi_inv,B).reshape((length,ix*iu)).transpose() * alpha
+            # dbmdt = np.linalg.lstsq(Phi,B).reshape((length,ix*iu)).transpose() * alpha
             dbpdt = np.matmul(Phi_inv,B).reshape((length,ix*iu)).transpose() * beta
             dsdt = np.squeeze(np.matmul(Phi_inv,np.expand_dims(f,2))).transpose()
             dzdt = np.squeeze(np.matmul(Phi_inv,-np.matmul(A,np.expand_dims(x,2)) - np.matmul(B,np.expand_dims(u,2)))).transpose()
@@ -407,7 +425,8 @@ class OptimalcontrolModel(object) :
         V0 = np.array([np.hstack((x[i],A0,Bm0,Bp0,s0,z0)) for i in range(N)]).transpose()
         V0_repeat = V0.flatten(order='F')
 
-        sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),method='RK45',rtol=1e-6,atol=1e-10)
+        # sol = solve_ivp(dvdt,(0,dtau),V0_repeat,args=(u[0:N],u[1:],N),method='RK45',rtol=1e-6,atol=1e-10)
+        sol = RK4(dvdt,(0,dtau),V0_repeat,args=(u[0:N],u[1:],N),N_RK=50)
         idx_state = slice(0,ix)
         idx_A = slice(ix,ix+ix*ix)
         idx_Bm = slice(ix+ix*ix,ix+ix*ix+ix*iu)
@@ -567,7 +586,7 @@ class OptimalcontrolModel(object) :
 
         return A,Bm,Bp,s,z,x_prop
 
-    def diff_discrete_foh_test2(self,x,u,delT,tf) :
+    def diff_discrete_foh_variational(self,x,u,dtau,tf) :
         ix = self.ix
         iu = self.iu
 
@@ -578,29 +597,27 @@ class OptimalcontrolModel(object) :
             u = np.expand_dims(u,axis=0)
         else :
             N = np.size(x,axis = 0)
-        # delT = self.delT
         idx_state = slice(0,ix)
         idx_A = slice(ix,ix+ix*ix)
         idx_Bm = slice(ix+ix*ix,ix+ix*ix+ix*iu)
         idx_Bp = slice(ix+ix*ix+ix*iu,ix+ix*ix+2*ix*iu)
         idx_s = slice(ix+ix*ix+2*ix*iu,ix+ix*ix+2*ix*iu+ix)
-        idx_z = slice(ix+ix*ix+2*ix*iu+ix,ix+ix*ix+2*ix*iu+ix+ix)
+        # idx_z = slice(ix+ix*ix+2*ix*iu+ix,ix+ix*ix+2*ix*iu+ix+ix)
         def dvdt(t,V,um,up,length) :
             assert len(um) == len(up)
             assert len(um) == length
-            alpha = (delT - t) / delT
-            beta = t / delT
+            alpha = (dtau - t) / dtau
+            beta = t / dtau
             u = alpha * um + beta * up
-            # IPython.embed()
-            V = V.reshape((length,ix + ix*ix + 2*ix*iu + ix + ix)).transpose()
+            # V = V.reshape((length,ix + ix*ix + 2*ix*iu + ix + ix)).transpose()
+            V = V.reshape((length,ix + ix*ix + 2*ix*iu + ix)).transpose()
             x = V[:ix].transpose()
             Phi = V[ix:ix*ix + ix]
             Phi = Phi.transpose().reshape((length,ix,ix))
-            # Phi_inv = np.linalg.inv(Phi)
             x3 = V[idx_Bm].transpose().reshape(length,ix,iu)
             x4 = V[idx_Bp].transpose().reshape(length,ix,iu)
             x5 = V[idx_s].transpose().reshape(length,ix,1)
-            x6 = V[idx_z].transpose().reshape(length,ix,1)
+            # x6 = V[idx_z].transpose().reshape(length,ix,1)
             f = self.forward(x,u)
             if self.type_linearization == "numeric_central" :
                 A,B = self.diff_numeric_central(x,u)
@@ -608,26 +625,28 @@ class OptimalcontrolModel(object) :
                 A,B = self.diff_numeric(x,u)
             elif self.type_linearization == "analytic" :
                 A,B = self.diff(x,u)
-
+            A,B = tf*A,tf*B
             dpdt = np.matmul(A,Phi).reshape((length,ix*ix)).transpose()
-            dbmdt = (A@x3 + B).reshape((length,ix*iu)).transpose()
+            dbmdt = (A@x3 + B*alpha).reshape((length,ix*iu)).transpose()
             dbpdt = (A@x4 + B*beta).reshape((length,ix*iu)).transpose()
-            dsdt = np.squeeze(A@x5 + np.expand_dims(f,2)/tf).transpose()
-            dzdt = np.squeeze(A@x6 - A@np.expand_dims(x,2) - B@np.expand_dims(u,2)).transpose()
-            dv = np.vstack((f.transpose(),dpdt,dbmdt,dbpdt,dsdt,dzdt))
+            dsdt = np.squeeze(A@x5 + np.expand_dims(f,2)).transpose()
+            # dzdt = np.squeeze(A@x6 - A@np.expand_dims(x,2) - B@np.expand_dims(u,2)).transpose()
+            # dv = np.vstack((tf*f.transpose(),dpdt,dbmdt,dbpdt,dsdt,dzdt))
+            dv = np.vstack((tf*f.transpose(),dpdt,dbmdt,dbpdt,dsdt))
             return dv.flatten(order='F')
         
         A0 = np.eye(ix).flatten()
         Bm0 = np.zeros((ix*iu))
         Bp0 = np.zeros((ix*iu))
         s0 = np.zeros(ix)
-        z0 = np.zeros(ix)
-        V0 = np.array([np.hstack((x[i],A0,Bm0,Bp0,s0,z0)) for i in range(N)]).transpose()
+        # z0 = np.zeros(ix)
+        # V0 = np.array([np.hstack((x[i],A0,Bm0,Bp0,s0,z0)) for i in range(N)]).transpose()
+        V0 = np.array([np.hstack((x[i],A0,Bm0,Bp0,s0)) for i in range(N)]).transpose()
         V0_repeat = V0.flatten(order='F')
 
-        # sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-12,atol=1e-12)
-        sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-6,atol=1e-10)
-        # sol = solve_ivp(dvdt,(0,delT),V0_repeat,args=(u[0:N],u[1:],N))
+        # sol = solve_ivp(dvdt,(0,dtau),V0_repeat,args=(u[0:N],u[1:],N),rtol=1e-6,atol=1e-10)
+        # sol = solve_ivp(dvdt,(0,dtau),V0_repeat,args=(u[0:N],u[1:],N))
+        sol = RK4(dvdt,(0,dtau),V0_repeat,args=(u[0:N],u[1:],N),N_RK=50)
 
         sol = sol.y[:,-1].reshape((N,-1))
         x_prop = sol[:,idx_state].reshape((-1,ix))
@@ -635,6 +654,10 @@ class OptimalcontrolModel(object) :
         Bm = sol[:,idx_Bm].reshape((-1,ix,iu))
         Bp = sol[:,idx_Bp].reshape((-1,ix,iu))
         s = sol[:,idx_s].reshape((-1,ix,1)).squeeze()
-        z = sol[:,idx_z].reshape((-1,ix,1)).squeeze()
+        # z = sol[:,idx_z].reshape((-1,ix,1)).squeeze()
+        z = x_prop - np.squeeze(A@np.expand_dims(x[0:N,:],2) +
+                            Bm@np.expand_dims(u[0:N,:],2) + 
+                            Bp@np.expand_dims(u[1:N+1,:],2) + 
+                            np.expand_dims(tf*s,2))
 
-        return A,Bm-Bp,Bp,s,z,x_prop
+        return A,Bm,Bp,s,z,x_prop
