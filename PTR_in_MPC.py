@@ -229,8 +229,8 @@ class PTR_in_MPC(PTR):
 
         error = False
         try : 
-            # self.prob.solve(verbose=False,solver=cvx.ECOS,warm_start=False)
-            self.prob.solve(verbose=False,solver=cvx.GUROBI,warm_start=False)
+            self.prob.solve(verbose=False,solver=cvx.ECOS,warm_start=False)
+            # self.prob.solve(verbose=False,solver=cvx.GUROBI,warm_start=False)
         except cvx.error.SolverError :
             error = True
 

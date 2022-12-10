@@ -1,4 +1,5 @@
 # Robust Model predictive control via sequential convex programming for obstacle avoidance
+ - The current version is using Gurobi solver. If you don't have a license, change it to ECOS in PTR_in_MPC.py and PTR_tf_free.py
 
 ## Static obstacle avoidance for unicycle model
 <img src="images/MPC_static_obstacle.gif" width="400" height="400">
