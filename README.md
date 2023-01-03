@@ -13,6 +13,9 @@
 ## Moving obstacle avoidance for unicycle model with considering forward reachable sets of the obstacle 
 <img src="images/MPC_moving_obstacle_Ellipse_extreme.gif" width="400" height="400">
 
+## Moving obstacle avoidance with funnel
+<img src="images/MPC_with_funnel_moving_obstacle_time_varying.gif" width="400" height="400">
+
 ## References
 * Successive Convexification for 6-DoF Mars
 Rocket Powered Landing with Free-Final-Time (https://arxiv.org/pdf/1802.03827.pdf)

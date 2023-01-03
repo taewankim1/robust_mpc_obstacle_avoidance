@@ -3,9 +3,11 @@ import os
 from mpl_toolkits.mplot3d import art3d
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse,Rectangle
 import numpy as np
 import time
 import random
+from utils.utils_alg import get_radius_angle
 def print_np(x):
     print ("Type is %s" % (type(x)))
     print ("Shape is %s" % (x.shape,))
@@ -229,3 +231,60 @@ def make_quadrotor_trajectory_fig(x,obs,c,H,r,img_name='quadrotor') :
             writer.append_data(image)
     for filename in set(filenames):
         os.remove(filename)
+
+def plot_traj_funnel(x,u,Q,xi=None,xf=None,Qi=None,Qf=None,plt=plt,flag_label=True,fS=15) :
+    radius_list,angle_list = get_radius_angle(Q)
+
+    # plt.figure(idx_plot,figsize=(7,7))
+    plt.plot(x[:,0], x[:,1],'--',color='tab:orange',alpha=0.8,linewidth=2.0)
+    ax=plt.gca()
+    if Qi is not None :
+        radius_f,angle_f = get_radius_angle([Qi])
+        for radius,angle in zip(radius_f,angle_f) :
+            ell = Ellipse((xi[0],xi[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),
+            color='tab:green',alpha=0.5,fill=True)
+            ax.add_patch(ell)
+    if Qf is not None :
+        radius_f,angle_f = get_radius_angle([Qf])
+        for radius,angle in zip(radius_f,angle_f) :
+            ell = Ellipse((xf[0],xf[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),
+            color='tab:green',alpha=0.5,fill=True)
+            ax.add_patch(ell)
+    for x_,radius,angle in zip(x,radius_list,angle_list) :
+        ell = Ellipse((x_[0],x_[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),color='tab:blue',alpha=0.5,fill=True)
+        ax.add_patch(ell)
+    # if xf is not None :
+    #     plt.plot(xf[0],xf[1],"o",label='goal')
+    if flag_label == True :
+        plt.plot(1e3,1e3,'--',color='tab:orange',label="nominal")
+        plt.plot(1e3,1e3,'o',markersize=15,color='tab:blue',label="funnel") 
+        plt.plot(1e3,1e3,'o',markersize=15,color='tab:green',label="initial and final ellipsoid") 
+        # plt.plot(1e3,1e3,'o',markersize=15,color='tab:green',label="final") 
+        plt.plot(1e3,1e3,'o',markersize=15,alpha=0.5,color='tab:red',label="obstacles") 
+
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.axis([-1.0, 6.0, -1.0, 6.0])
+    plt.xlabel('$r_x$ (m)', fontsize = fS)
+    plt.ylabel('$r_y$ (m)', fontsize = fS)
+    if flag_label == True :
+        plt.legend(fontsize=fS)
+    ticks_font = "Times New Roman"
+    for label in ax.get_xticklabels():
+        label.set_fontproperties(ticks_font)
+
+    for label in ax.get_yticklabels():
+        label.set_fontproperties(ticks_font)
+
+def plot_funnel(x,Q,ax) :
+    radius_list,angle_list = get_radius_angle(Q)
+    # ax=plt.gca()
+    for x_,radius,angle in zip(x,radius_list,angle_list) :
+        ell = Ellipse((x_[0],x_[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),color='tab:blue',alpha=0.5,fill=True)
+        ax.add_patch(ell)
+    ax.plot(1e3,1e3,'o',markersize=15,color='tab:blue',label="funnel") 
+    # ticks_font = "Times New Roman"
+    # for label in ax.get_xticklabels():
+    #     label.set_fontproperties(ticks_font)
+
+    # for label in ax.get_yticklabels():
+    #     label.set_fontproperties(ticks_font)

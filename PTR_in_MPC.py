@@ -285,7 +285,7 @@ class PTR_in_MPC(PTR):
         tic_bottom = time.time()
         for iteration in range(self.maxIter) :
             history_iter = {}
-            # differentiate dynamics and cost
+            # differentiate dynamics
             tic = time.time()
             self.A,self.B,self.Bm,self.Bp,self.s,self.z,self.x_prop,self.x_prop_n = self.get_linearized_matrices(self.x,self.u,self.delT,self.tf)
             history_iter['derivs'] = time.time() - tic
