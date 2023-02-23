@@ -14,9 +14,16 @@
 <img src="images/MPC_moving_obstacle_Ellipse_extreme.gif" width="400" height="400">
 
 ## Moving obstacle avoidance with funnel
-<img src="images/MPC_with_funnel_moving_obstacle_time_varying.gif" width="400" height="400">
+<img src="images/MPC_with_funnel_Q_K" width="400" height="400">
+
+## Moving obstacle avoidance with funnel with LQR Kgain
+<img src="images/MPC_with_funnel_Q_LQR_K" width="400" height="400">
+
+## Moving obstacle avoidance with funnel with LQR Kgain and fixed Q
+<img src="images/MPC_with_funnel_LQR_K_fix_Q" width="400" height="400">
 
 ## References
 * Successive Convexification for 6-DoF Mars
 Rocket Powered Landing with Free-Final-Time (https://arxiv.org/pdf/1802.03827.pdf)
+* Joint synthesis (https://arxiv.org/abs/2209.03535)
 

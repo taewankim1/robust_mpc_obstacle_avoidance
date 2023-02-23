@@ -278,8 +278,13 @@ def plot_traj_funnel(x,u,Q,xi=None,xf=None,Qi=None,Qf=None,plt=plt,flag_label=Tr
 def plot_funnel(x,Q,ax) :
     radius_list,angle_list = get_radius_angle(Q)
     # ax=plt.gca()
-    for x_,radius,angle in zip(x,radius_list,angle_list) :
+    N = len(x)
+    for idx,(x_,radius,angle) in enumerate(zip(x,radius_list,angle_list)) :
+        # if idx < N -1 :
         ell = Ellipse((x_[0],x_[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),color='tab:blue',alpha=0.5,fill=True)
+        # else :
+        #     ell = Ellipse((x_[0],x_[1]),radius[0]*2,radius[1]*2,angle=np.rad2deg(angle),color='tab:red',alpha=0.5,fill=True)
+
         ax.add_patch(ell)
     ax.plot(1e3,1e3,'o',markersize=15,color='tab:blue',label="funnel") 
     # ticks_font = "Times New Roman"

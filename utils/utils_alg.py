@@ -37,8 +37,8 @@ def get_K_discrete(A,B,Q,R,Q_final,N,ix,iu) :
     K = np.zeros((N,iu,ix))
     P[N] = Q_final
     for i in range(N-1,-1,-1) :
-        K[i] = np.linalg.inv(B[i].T@P[i+1]@B[i]+R)@B[i].T@P[i+1]@A[i]
-        P[i] = (A[i]-B[i]@K[i]).T@P[i+1]@(A[i]-B[i]@K[i])+K[i].T@R@K[i]+Q
+        K[i] = -np.linalg.inv(B[i].T@P[i+1]@B[i]+R)@B[i].T@P[i+1]@A[i]
+        P[i] = (A[i]+B[i]@K[i]).T@P[i+1]@(A[i]+B[i]@K[i])+K[i].T@R@K[i]+Q
     return K
 
 def project_ellipse(Q) : 
